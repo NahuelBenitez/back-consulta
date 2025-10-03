@@ -61,17 +61,40 @@ router.get('/', async (req, res) => {
     const countResult = await pool.query('SELECT COUNT(*) FROM _articulos');
     const total = parseInt(countResult.rows[0].count);
 
+    // Si no hay artículos
+    if (total === 0) {
+      return res.status(404).json({ 
+        message: 'No hay artículos disponibles en la base de datos',
+        articulos: [],
+        total: 0,
+        pagina: page,
+        totalPaginas: 0
+      });
+    }
+
     // Obtener artículos paginados
     const result = await pool.query(
       'SELECT * FROM _articulos ORDER BY codart LIMIT $1 OFFSET $2',
       [limit, offset]
     );
 
+    // Si no hay artículos en la página solicitada
+    if (result.rows.length === 0) {
+      return res.status(404).json({ 
+        message: `No hay artículos en la página ${page}`,
+        articulos: [],
+        total,
+        pagina: page,
+        totalPaginas: Math.ceil(total / limit)
+      });
+    }
+
     res.json({
       articulos: result.rows,
       total,
       pagina: page,
-      totalPaginas: Math.ceil(total / limit)
+      totalPaginas: Math.ceil(total / limit),
+      message: result.rows.length === 1 ? '1 artículo encontrado' : `${result.rows.length} artículos encontrados`
     });
   } catch (error) {
     console.error('Error al obtener artículos:', error);
