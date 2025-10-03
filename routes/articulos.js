@@ -53,18 +53,24 @@ const pool = require('../database');
  */
 router.get('/', async (req, res) => {
   try {
+    console.log('🔍 Ejecutando GET /api/articulos');
+    
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
-    // Obtener total de registros
-    const countResult = await pool.query('SELECT COUNT(*) FROM _articulos');
-    const total = parseInt(countResult.rows[0].count);
+    // Primero probemos solo obtener los artículos sin COUNT
+    const result = await pool.query(
+      'SELECT * FROM _articulos ORDER BY codart LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+
+    console.log(`📊 Artículos encontrados: ${result.rows.length}`);
 
     // Si no hay artículos
-    if (total === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ 
-        message: 'No hay artículos disponibles en la base de datos',
+        message: 'No hay artículos disponibles',
         articulos: [],
         total: 0,
         pagina: page,
@@ -72,33 +78,24 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // Obtener artículos paginados
-    const result = await pool.query(
-      'SELECT * FROM _articulos ORDER BY codart LIMIT $1 OFFSET $2',
-      [limit, offset]
-    );
-
-    // Si no hay artículos en la página solicitada
-    if (result.rows.length === 0) {
-      return res.status(404).json({ 
-        message: `No hay artículos en la página ${page}`,
-        articulos: [],
-        total,
-        pagina: page,
-        totalPaginas: Math.ceil(total / limit)
-      });
-    }
+    // Solo si funciona, hacemos el COUNT
+    const countResult = await pool.query('SELECT COUNT(*) FROM _articulos');
+    const total = parseInt(countResult.rows[0].count);
 
     res.json({
       articulos: result.rows,
       total,
       pagina: page,
       totalPaginas: Math.ceil(total / limit),
-      message: result.rows.length === 1 ? '1 artículo encontrado' : `${result.rows.length} artículos encontrados`
+      message: `${result.rows.length} artículos encontrados`
     });
+
   } catch (error) {
-    console.error('Error al obtener artículos:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    console.error('❌ Error en GET /api/articulos:', error);
+    res.status(500).json({ 
+      error: 'Error interno del servidor',
+      details: error.message 
+    });
   }
 });
 
