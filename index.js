@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 // Verificar conexión a la base de datos al iniciar
-const checkDatabaseConnection = async () => {
+const initializeApp = async () => {
   try {
     const client = await pool.connect();
     console.log('✅ Conexión a la base de datos verificada correctamente');
@@ -80,7 +80,7 @@ app.listen(PORT, async () => {
   console.log(`❤️  Health check disponible en http://localhost:${PORT}/health`);
   
   // Verificar conexión a la base de datos
-  await checkDatabaseConnection();
+  await initializeApp();
 });
 
 module.exports = app;
