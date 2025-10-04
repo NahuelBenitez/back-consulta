@@ -10,8 +10,8 @@ const PORT = process.env.PORT || 3000;
 
 // Middlewares
 app.use(cors());
-app.use(express.json({ limit: '50mb' })); // ← Aumentar de 1MB a 50MB
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '150mb' })); // ← Aumentar de 1MB a 50MB
+app.use(express.urlencoded({ extended: true, limit: '150mb' }));
 // Verificar conexión a la base de datos al iniciar
 const initializeApp = async () => {
   try {
