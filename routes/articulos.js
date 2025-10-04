@@ -439,38 +439,67 @@ router.post('/upsert/bulk', async (req, res) => {
       return res.status(400).json({ error: 'Se esperaba un array de artículos en la propiedad "articulos"' });
     }
 
+    // Validar cantidad máxima (opcional, por seguridad)
+    if (articulos.length > 10000) {
+      return res.status(400).json({ 
+        error: 'Demasiados artículos',
+        message: 'Máximo 10,000 artículos por lote',
+        recibidos: articulos.length
+      });
+    }
+
+    console.log(`📦 Procesando ${articulos.length} artículos...`);
+
     const client = await pool.connect();
 
     try {
       await client.query('BEGIN');
 
-      for (const articulo of articulos) {
-        const { codart, npm, stock, pcosto, pordif } = articulo;
+      let procesados = 0;
+      const batchSize = 100; // Procesar en lotes de 100
 
-        if (!codart) continue; // Saltar artículos sin código
+      for (let i = 0; i < articulos.length; i += batchSize) {
+        const batch = articulos.slice(i, i + batchSize);
+        
+        for (const articulo of batch) {
+          const { codart, npm, stock, pcosto, pordif } = articulo;
 
-        // Usar INSERT ... ON CONFLICT para UPSERT (PostgreSQL 9.5+)
-        await client.query(
-          `INSERT INTO _articulos (codart, npm, stock, pcosto, pordif) 
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (codart) 
-           DO UPDATE SET 
-             npm = EXCLUDED.npm,
-             stock = EXCLUDED.stock,
-             pcosto = EXCLUDED.pcosto,
-             pordif = EXCLUDED.pordif`,
-          [codart, npm, stock, pcosto, pordif]
-        );
+          if (!codart) continue;
+
+          await client.query(
+            `INSERT INTO _articulos (codart, npm, stock, pcosto, pordif) 
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (codart) 
+             DO UPDATE SET 
+               npm = EXCLUDED.npm,
+               stock = EXCLUDED.stock,
+               pcosto = EXCLUDED.pcosto,
+               pordif = EXCLUDED.pordif`,
+            [codart, npm, stock, pcosto, pordif]
+          );
+          
+          procesados++;
+        }
+
+        // Pequeña pausa para no saturar la base de datos
+        if (i + batchSize < articulos.length) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
       }
 
       await client.query('COMMIT');
+      
+      console.log(`✅ ${procesados} artículos procesados exitosamente`);
       res.json({ 
         message: 'Procesamiento masivo completado',
-        total: articulos.length 
+        total: articulos.length,
+        procesados: procesados,
+        timestamp: new Date().toISOString()
       });
 
     } catch (error) {
       await client.query('ROLLBACK');
+      console.error('❌ Error en transacción:', error);
       throw error;
     } finally {
       client.release();
@@ -478,7 +507,10 @@ router.post('/upsert/bulk', async (req, res) => {
 
   } catch (error) {
     console.error('Error en upsert masivo:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ 
+      error: 'Error interno del servidor',
+      details: error.message 
+    });
   }
 });
 
