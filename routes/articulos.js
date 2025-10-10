@@ -53,41 +53,28 @@ const pool = require('../database');
  */
 router.get('/', async (req, res) => {
   try {
-    console.log('🔍 Ejecutando GET /api/articulos');
+    console.log('🔍 Ejecutando GET /api/articulos - TODOS los artículos');
     
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const offset = (page - 1) * limit;
-
-    // Primero probemos solo obtener los artículos sin COUNT
+    // ✅ SOLO UNA CONSULTA - Sin paginación
     const result = await pool.query(
-      'SELECT * FROM _articulos ORDER BY codart LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM _articulos ORDER BY codart'
     );
 
-    console.log(`📊 Artículos encontrados: ${result.rows.length}`);
+    console.log(`📊 Total de artículos encontrados: ${result.rows.length}`);
 
     // Si no hay artículos
     if (result.rows.length === 0) {
       return res.status(404).json({ 
         message: 'No hay artículos disponibles',
         articulos: [],
-        total: 0,
-        pagina: page,
-        totalPaginas: 0
+        total: 0
       });
     }
 
-    // Solo si funciona, hacemos el COUNT
-    const countResult = await pool.query('SELECT COUNT(*) FROM _articulos');
-    const total = parseInt(countResult.rows[0].count);
-
     res.json({
       articulos: result.rows,
-      total,
-      pagina: page,
-      totalPaginas: Math.ceil(total / limit),
-      message: `${result.rows.length} artículos encontrados`
+      total: result.rows.length,
+      message: `${result.rows.length} artículos cargados exitosamente`
     });
 
   } catch (error) {
