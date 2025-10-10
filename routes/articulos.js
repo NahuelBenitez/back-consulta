@@ -53,28 +53,64 @@ const pool = require('../database');
  */
 router.get('/', async (req, res) => {
   try {
-    console.log('🔍 Ejecutando GET /api/articulos - TODOS los artículos');
+    console.log('🔍 Ejecutando GET /api/articulos con filtros');
     
-    // ✅ SOLO UNA CONSULTA - Sin paginación
-    const result = await pool.query(
-      'SELECT * FROM _articulos ORDER BY codart'
-    );
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const offset = (page - 1) * limit;
 
-    console.log(`📊 Total de artículos encontrados: ${result.rows.length}`);
+    console.log(`📊 Parámetros - page: ${page}, limit: ${limit}, search: "${search}"`);
 
-    // Si no hay artículos
-    if (result.rows.length === 0) {
-      return res.status(404).json({ 
-        message: 'No hay artículos disponibles',
-        articulos: [],
-        total: 0
-      });
+    let whereClause = '';
+    let countWhereClause = '';
+    const queryParams = [];
+    let paramIndex = 1;
+
+    // Construir WHERE clause si hay búsqueda
+    if (search) {
+      whereClause = ` WHERE npm ILIKE $${paramIndex}`;
+      countWhereClause = ` WHERE npm ILIKE $${paramIndex}`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
     }
+
+    // Query para los datos
+    const dataQuery = `
+      SELECT * FROM _articulos 
+      ${whereClause}
+      ORDER BY codart 
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    // Query para el count
+    const countQuery = `
+      SELECT COUNT(*) FROM _articulos 
+      ${countWhereClause}
+    `;
+
+    // Parámetros para data query
+    const dataParams = [...queryParams, limit, offset];
+
+    console.log('📋 Query ejecutada:', dataQuery);
+    console.log('🔢 Parámetros:', dataParams);
+
+    // Ejecutar en paralelo para mejor performance
+    const [result, countResult] = await Promise.all([
+      pool.query(dataQuery, dataParams),
+      pool.query(countQuery, queryParams)
+    ]);
+
+    console.log(`📊 Artículos encontrados: ${result.rows.length}`);
+    const total = parseInt(countResult.rows[0].count);
 
     res.json({
       articulos: result.rows,
-      total: result.rows.length,
-      message: `${result.rows.length} artículos cargados exitosamente`
+      total,
+      pagina: page,
+      totalPaginas: Math.ceil(total / limit),
+      searchTerm: search || null,
+      message: `${result.rows.length} artículos encontrados`
     });
 
   } catch (error) {
